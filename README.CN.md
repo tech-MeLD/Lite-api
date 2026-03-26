@@ -1,175 +1,134 @@
 # 标准 FastAPI 后端
 
-一个适合团队协作的标准化 FastAPI RESTful API 模板，包含：
+这是一个保持轻量、但已经具备公网 API 基本防护能力的 FastAPI 模板。
 
-- 分层结构：`api / schemas / services / core`
-- RESTful 路由与 `/api/v1` 版本控制
-- 外部 API 聚合示例：GitHub 仓库统计、天气数据
-- 统一配置管理与环境变量加载
-- Docker 化运行环境
-- Python 版本统一策略
+## 这次新增了什么
 
-## 为什么采用这种结构
+- 统一日志，自动生成或透传 `X-Request-ID`
+- 统一 API 异常码和错误返回结构
+- 简单 `X-API-Key` 鉴权
+- GitHub 数据走 Redis TTL 缓存
+- 天气数据使用 SQLite + SQLModel 持久化
+- `pre-commit`、`ruff`、`mypy`、`pytest`
+- GitHub Actions CI
 
-这个模板的目标不是“先跑起来”，而是让团队后续维护成本更低：
+## 设计原则
 
-- `pyproject.toml` 是依赖和 Python 版本范围的单一事实来源
-- `.python-version` 固定本地开发使用的 Python 版本
-- `Dockerfile` 固定容器内 Python 版本和系统依赖
-- `.env.example` 统一环境变量约定
+这套方案刻意避免过度工程化：
 
-## 项目结构
+- 不引入 Alembic
+- 不上 JWT / OAuth
+- 不拆成复杂的模块层级
+- 不增加消息队列或后台任务系统
 
-```text
-.
-├─ app
-│  ├─ api
-│  │  ├─ routes
-│  │  └─ router.py
-│  ├─ core
-│  ├─ schemas
-│  ├─ services
-│  └─ main.py
-├─ tests
-├─ .env.example
-├─ .python-version
-├─ docker-compose.yml
-├─ Dockerfile
-└─ pyproject.toml
+目标是让团队“现在就能稳定开发”，而不是一开始就背上很重的维护成本。
+
+## API 概览
+
+公开接口：
+
+- `GET /api/v1/health`
+
+需要 API-Key 的接口：
+
+- `GET /api/v1/external/github/repo-stats?owner=fastapi&repo=fastapi`
+- `GET /api/v1/external/weather?latitude=39.9042&longitude=116.4074`
+- `GET /api/v1/external/weather/history?limit=20`
+
+请求头示例：
+
+```http
+X-API-Key: your-api-key
 ```
 
-## API端点
+所有响应也会带上：
 
-### 1. 健康检查
+```http
+X-Request-ID: <uuid>
+```
 
-`GET /api/v1/health`
-
-### 2. GitHub 存储库统计
-
-`GET /api/v1/external/github/repo-stats?owner=fastapi&repo=fastapi`
-
-返回示例：
+## 异常返回格式
 
 ```json
 {
-  "message": "GitHub repository statistics fetched successfully",
-  "data": {
-    "owner": "fastapi",
-    "repository": "fastapi",
-    "description": "FastAPI framework, high performance, easy to learn, fast to code, ready for production",
-    "stars": 0,
-    "forks": 0,
-    "open_issues": 0,
-    "watchers": 0,
-    "primary_language": "Python",
-    "default_branch": "master",
-    "html_url": "https://github.com/fastapi/fastapi",
-    "updated_at": "2026-03-26T00:00:00+00:00"
-  }
+  "code": "INVALID_API_KEY",
+  "message": "Invalid or missing API key",
+  "details": null,
+  "request_id": "4b9bb7e0-6d44-4d3b-9f34-1f6e0f2d7f58"
 }
 ```
 
+当前定义的异常码：
+
+- `INVALID_API_KEY`
+- `VALIDATION_ERROR`
+- `UPSTREAM_SERVICE_ERROR`
+- `HTTP_ERROR`
+- `INTERNAL_SERVER_ERROR`
+
+## 关键设计决策
+
+### 1. Python 版本统一
+
+团队基线固定为 `Python 3.11.14`。
+
+同时在这些位置统一：
+
+- `pyproject.toml`
+- `.python-version`
+- `Dockerfile`
+- GitHub Actions
+
+Python 版本不应该只写在依赖里，而是要在包元数据、本地工具链、CI、容器运行时一起固定。
+
+### 2. GitHub 数据
+
+GitHub 数据暂时不落库，只通过 Redis 做 TTL 缓存，减少外部 API 请求次数，也能降低被盗刷后的放大效应。
+
 ### 3. 天气数据
 
-`GET /api/v1/external/weather?latitude=39.9042&longitude=116.4074`
+天气数据会落到 SQLite，通过 SQLModel 管理。当前实现会优先复用近期缓存记录，并支持历史查询接口。
 
-## 本地发展
-
-### 1. 创建虚拟环境
+## 本地开发
 
 ```bash
 python -m venv .venv
-```
-
-### 2. 激活虚拟环境
-
-Windows PowerShell：
-
-```powershell
-.venv\Scripts\Activate.ps1
-```
-
-macOS / Linux：
-
-```bash
-source .venv/bin/activate
-```
-
-### 3.安装依赖项
-
-```bash
 python -m pip install --upgrade pip
 python -m pip install -e .[dev]
 ```
 
-### 4.准备环境变量
-
-复制 `.env.example` 为 `.env`，然后按需修改：
-
-```env
-APP_ENV=development
-DEBUG=true
-REQUEST_TIMEOUT_SECONDS=10
-GITHUB_API_BASE_URL=https://api.github.com
-WEATHER_API_BASE_URL=https://api.open-meteo.com/v1
-```
-
-### 5. 运行服务
+然后根据 `.env.example` 准备 `.env`，再启动：
 
 ```bash
 uvicorn app.main:app --reload
 ```
 
-启动后访问：
-
-- 招摇用户界面： `http://127.0.0.1:8000/docs`
-- 重新文档： `http://127.0.0.1:8000/redoc`
-
-## 码头工人
-
-### 构建并运行
+## Docker
 
 ```bash
 docker compose up --build
 ```
 
-## 测试
+会同时启动：
+
+- FastAPI 服务
+- Redis 缓存
+- 挂载 SQLite 数据目录
+
+## 代码质量工具
 
 ```bash
+pre-commit install
+pre-commit run --all-files
+ruff check .
+mypy app
 pytest
 ```
 
-## 团队标准化建议
+## CI
 
-### 1. Python版本不应仅在依赖项中进行管理
+GitHub Actions 会执行：
 
-Python 版本不建议只写在依赖列表里。标准做法是同时固定在以下几个位置：
-
-- `pyproject.toml` 中的 `requires-python`
-- `.python-version`
-- `Dockerfile` 的基础镜像
-- CI 配置中的 Python 版本
-
-这样可以同时约束：
-
-- 包安装时的可用版本范围
-- 本地开发工具选用的解释器版本
-- 容器运行时的真实版本
-- 持续集成环境的一致性
-
-### 2. 推荐的团队工作流程
-
-- 本地开发统一使用 `Python 3.11.14`
-- 所有人通过 `pyproject.toml` 安装依赖，不手写零散 `requirements.txt`
-- 生产和测试环境优先通过 Docker 运行
-- 后续如果接入 CI，继续固定 `3.11.14`
-
-### 3. 何时添加requirements.txt
-
-如果你的部署平台或某些内部工具仍然强依赖 `requirements.txt`，可以从 `pyproject.toml` 派生生成一个锁定文件；但在这个模板里，建议 `pyproject.toml` 作为主入口，避免维护两份手工依赖清单。
-
-## 笔记
-
-- GitHub API 可能受到速率限制，生产环境建议加认证令牌或缓存
-- 天气接口当前使用 Open-Meteo 公共接口，便于快速演示和联调
-- 如果后续需要数据库、认证、日志、链路追踪，可以继续在当前结构上扩展
+- `ruff check .`
+- `mypy app`
+- `pytest`

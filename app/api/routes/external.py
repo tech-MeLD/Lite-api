@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, Query
 
 from app.schemas.common import ApiResponse
-from app.schemas.external import GitHubRepoStats, WeatherData
+from app.schemas.external import GitHubRepoStats, WeatherData, WeatherRecordData
 from app.services.external_api import ExternalApiService, get_external_api_service
 
 router = APIRouter()
@@ -25,3 +25,12 @@ async def get_weather(
 ) -> ApiResponse[WeatherData]:
     data = await service.fetch_weather(latitude=latitude, longitude=longitude)
     return ApiResponse(message="Weather data fetched successfully", data=data)
+
+
+@router.get("/weather/history", response_model=ApiResponse[list[WeatherRecordData]])
+async def get_weather_history(
+    limit: int = Query(default=20, ge=1, le=100, description="Maximum number of records to return"),
+    service: ExternalApiService = Depends(get_external_api_service),
+) -> ApiResponse[list[WeatherRecordData]]:
+    data = await service.list_weather_history(limit=limit)
+    return ApiResponse(message="Weather history fetched successfully", data=data)

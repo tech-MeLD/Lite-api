@@ -1,25 +1,88 @@
-from fastapi import FastAPI, Request, status
+from enum import Enum
+
+from fastapi import FastAPI, HTTPException, Request, status
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
+from app.core.request_context import get_request_id
 
-class UpstreamServiceError(Exception):
-    def __init__(self, service_name: str, detail: str, status_code: int = status.HTTP_502_BAD_GATEWAY) -> None:
-        self.service_name = service_name
-        self.detail = detail
+
+class ErrorCode(str, Enum):
+    INVALID_API_KEY = "INVALID_API_KEY"
+    VALIDATION_ERROR = "VALIDATION_ERROR"
+    UPSTREAM_SERVICE_ERROR = "UPSTREAM_SERVICE_ERROR"
+    HTTP_ERROR = "HTTP_ERROR"
+    INTERNAL_SERVER_ERROR = "INTERNAL_SERVER_ERROR"
+
+
+class ApiException(Exception):
+    def __init__(
+        self,
+        status_code: int,
+        code: ErrorCode,
+        message: str,
+        details: dict | list | None = None,
+    ) -> None:
         self.status_code = status_code
-        super().__init__(detail)
+        self.code = code
+        self.message = message
+        self.details = details
+        super().__init__(message)
+
+
+class UpstreamServiceError(ApiException):
+    def __init__(self, service_name: str, detail: str, status_code: int = status.HTTP_502_BAD_GATEWAY) -> None:
+        super().__init__(
+            status_code=status_code,
+            code=ErrorCode.UPSTREAM_SERVICE_ERROR,
+            message=f"{service_name} request failed",
+            details={"service": service_name, "detail": detail},
+        )
+
+
+def _error_response(
+    status_code: int,
+    code: ErrorCode,
+    message: str,
+    details: dict | list | None = None,
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=status_code,
+        content={
+            "code": code,
+            "message": message,
+            "details": details,
+            "request_id": get_request_id(),
+        },
+    )
 
 
 def add_exception_handlers(app: FastAPI) -> None:
-    @app.exception_handler(UpstreamServiceError)
-    async def upstream_service_error_handler(_: Request, exc: UpstreamServiceError) -> JSONResponse:
-        return JSONResponse(
-            status_code=exc.status_code,
-            content={
-                "message": f"{exc.service_name} request failed",
-                "data": {
-                    "detail": exc.detail,
-                    "service": exc.service_name,
-                },
-            },
+    @app.exception_handler(ApiException)
+    async def api_exception_handler(_: Request, exc: ApiException) -> JSONResponse:
+        return _error_response(exc.status_code, exc.code, exc.message, exc.details)
+
+    @app.exception_handler(RequestValidationError)
+    async def request_validation_exception_handler(_: Request, exc: RequestValidationError) -> JSONResponse:
+        return _error_response(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            ErrorCode.VALIDATION_ERROR,
+            "Request validation failed",
+            exc.errors(),
+        )
+
+    @app.exception_handler(HTTPException)
+    async def http_exception_handler(_: Request, exc: HTTPException) -> JSONResponse:
+        return _error_response(
+            exc.status_code,
+            ErrorCode.HTTP_ERROR,
+            str(exc.detail),
+        )
+
+    @app.exception_handler(Exception)
+    async def unhandled_exception_handler(_: Request, __: Exception) -> JSONResponse:
+        return _error_response(
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+            ErrorCode.INTERNAL_SERVER_ERROR,
+            "Internal server error",
         )

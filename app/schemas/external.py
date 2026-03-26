@@ -25,3 +25,8 @@ class WeatherData(BaseModel):
     wind_direction_degrees: float
     weather_code: int
     observed_at: datetime
+
+
+class WeatherRecordData(WeatherData):
+    id: int
+    fetched_at: datetime
