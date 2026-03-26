@@ -53,6 +53,7 @@ def create_app() -> FastAPI:
             response = await call_next(request)
         except Exception:
             logger.exception("request.failed method=%s path=%s", request.method, request.url.path)
+            reset_request_id(token)
             raise
 
         duration_ms = (perf_counter() - started_at) * 1000

@@ -63,3 +63,16 @@ async def get_session() -> AsyncIterator[AsyncSession]:
 
     async with _session_factory() as session:
         yield session
+
+
+async def check_database_health() -> tuple[str, str | None]:
+    init_engine()
+    if _engine is None:
+        return "error", "Database engine is not initialized"
+
+    try:
+        async with _engine.connect() as conn:
+            await conn.exec_driver_sql("SELECT 1")
+    except Exception as exc:
+        return "error", str(exc)
+    return "ok", None

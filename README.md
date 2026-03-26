@@ -28,6 +28,7 @@ It is enough for a team to start cleanly, while leaving room to grow.
 Public endpoint:
 
 - `GET /api/v1/health`
+- `GET /api/v1/health/dependencies`
 
 Protected endpoints:
 
@@ -103,6 +104,28 @@ Then prepare `.env` from `.env.example` and run:
 uvicorn app.main:app --reload
 ```
 
+## Makefile
+
+If your team uses `make`, these commands are now standardized:
+
+```bash
+make dev
+make run
+make check
+make docker-up
+```
+
+Common targets:
+
+- `make dev`: install app and dev dependencies
+- `make run`: start FastAPI in reload mode
+- `make lint`: run Ruff
+- `make typecheck`: run mypy
+- `make test`: run pytest
+- `make check`: run lint, typecheck, and tests
+
+On Windows, run them from Git Bash, WSL, or any environment with `make` installed.
+
 ## Docker
 
 ```bash
@@ -114,6 +137,13 @@ This starts:
 - the FastAPI app
 - Redis for GitHub cache
 - a mounted SQLite data directory for weather records
+
+## Health Checks
+
+- `GET /api/v1/health`: lightweight liveness check
+- `GET /api/v1/health/dependencies`: Redis and SQLite dependency check
+
+The dependency health endpoint returns `200` when all dependencies are healthy, and `503` when any dependency is degraded.
 
 ## Quality Tools
 

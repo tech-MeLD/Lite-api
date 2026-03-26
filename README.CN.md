@@ -28,6 +28,7 @@
 公开接口：
 
 - `GET /api/v1/health`
+- `GET /api/v1/health/dependencies`
 
 需要 API-Key 的接口：
 
@@ -103,6 +104,28 @@ python -m pip install -e .[dev]
 uvicorn app.main:app --reload
 ```
 
+## Makefile
+
+如果团队习惯统一命令入口，现在可以直接使用：
+
+```bash
+make dev
+make run
+make check
+make docker-up
+```
+
+常用目标：
+
+- `make dev`：安装项目和开发依赖
+- `make run`：本地热更新启动服务
+- `make lint`：执行 Ruff
+- `make typecheck`：执行 mypy
+- `make test`：执行 pytest
+- `make check`：串行执行 lint、类型检查、测试
+
+如果你在 Windows 上使用，建议通过 Git Bash、WSL 或已安装 `make` 的终端来执行。
+
 ## Docker
 
 ```bash
@@ -114,6 +137,13 @@ docker compose up --build
 - FastAPI 服务
 - Redis 缓存
 - 挂载 SQLite 数据目录
+
+## 健康检查
+
+- `GET /api/v1/health`：基础存活检查
+- `GET /api/v1/health/dependencies`：Redis 和 SQLite 依赖检查
+
+依赖健康检查在全部正常时返回 `200`，任一依赖异常时返回 `503`。
 
 ## 代码质量工具
 

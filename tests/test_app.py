@@ -1,5 +1,6 @@
 from fastapi.testclient import TestClient
 
+from app.api.routes import health as health_routes
 from app.main import app
 from app.schemas.external import GitHubRepoStats, WeatherData, WeatherRecordData
 from app.services.external_api import get_external_api_service
@@ -60,6 +61,23 @@ def test_health_check() -> None:
 
     assert response.status_code == 200
     assert response.json()["data"]["status"] == "ok"
+
+
+def test_dependency_health_check(monkeypatch) -> None:
+    async def mock_redis_health() -> tuple[str, str | None]:
+        return "ok", None
+
+    async def mock_sqlite_health() -> tuple[str, str | None]:
+        return "ok", None
+
+    monkeypatch.setattr(health_routes, "check_redis_health", mock_redis_health)
+    monkeypatch.setattr(health_routes, "check_database_health", mock_sqlite_health)
+
+    response = client.get("/api/v1/health/dependencies")
+
+    assert response.status_code == 200
+    assert response.json()["data"]["services"]["redis"]["status"] == "ok"
+    assert response.json()["data"]["services"]["sqlite"]["status"] == "ok"
 
 
 def test_github_repo_stats() -> None:
