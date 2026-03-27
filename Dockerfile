@@ -6,7 +6,6 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     APP_ENV=production \
     DEBUG=false \
     LOG_LEVEL=INFO \
-    API_KEY=change-me-local-dev \
     REDIS_URL=redis://redis:6379/0 \
     SQLITE_URL=sqlite+aiosqlite:///./data/weather.db \
     GITHUB_CACHE_TTL_SECONDS=300 \

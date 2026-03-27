@@ -21,7 +21,10 @@ router = APIRouter()
                         "data": {
                             "owner": "fastapi",
                             "repository": "fastapi",
-                            "description": "FastAPI framework, high performance, easy to learn, fast to code, ready for production",
+                            "description": (
+                                "FastAPI framework, high performance, easy to learn, "
+                                "fast to code, ready for production"
+                            ),
                             "stars": 90000,
                             "forks": 8000,
                             "open_issues": 120,
@@ -118,7 +121,12 @@ async def get_weather(
     },
 )
 async def get_weather_history(
-    limit: int = Query(default=20, ge=1, le=100, description="Maximum number of records to return"),
+    limit: int = Query(
+        default=20,
+        ge=1,
+        le=100,
+        description="Maximum number of records to return",
+    ),
     service: ExternalApiService = Depends(get_external_api_service),
 ) -> ApiResponse[list[WeatherRecordData]]:
     data = await service.list_weather_history(limit=limit)

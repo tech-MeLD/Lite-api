@@ -1,12 +1,12 @@
 import logging
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
+from typing import Any, cast
 
 import httpx
 from fastapi import Depends
 from redis.asyncio import Redis
 from redis.exceptions import RedisError
-from sqlalchemy import desc
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
@@ -49,7 +49,11 @@ class ExternalApiService:
             )
             response.raise_for_status()
         except httpx.HTTPStatusError as exc:
-            raise UpstreamServiceError("GitHub API", exc.response.text, exc.response.status_code) from exc
+            raise UpstreamServiceError(
+                "GitHub API",
+                exc.response.text,
+                exc.response.status_code,
+            ) from exc
         except httpx.HTTPError as exc:
             raise UpstreamServiceError("GitHub API", str(exc)) from exc
 
@@ -75,12 +79,15 @@ class ExternalApiService:
         return repo_stats
 
     async def fetch_weather(self, latitude: float, longitude: float) -> WeatherData:
-        cached_record = await self._get_latest_weather_record(latitude=latitude, longitude=longitude)
+        cached_record = await self._get_latest_weather_record(
+            latitude=latitude,
+            longitude=longitude,
+        )
         if cached_record is not None:
             return self._weather_record_to_schema(cached_record)
 
         url = f"{get_settings().weather_api_base_url}/forecast"
-        params = {
+        params: dict[str, str | float] = {
             "latitude": latitude,
             "longitude": longitude,
             "current_weather": "true",
@@ -89,7 +96,11 @@ class ExternalApiService:
             response = await self._client.get(url, params=params)
             response.raise_for_status()
         except httpx.HTTPStatusError as exc:
-            raise UpstreamServiceError("Weather API", exc.response.text, exc.response.status_code) from exc
+            raise UpstreamServiceError(
+                "Weather API",
+                exc.response.text,
+                exc.response.status_code,
+            ) from exc
         except httpx.HTTPError as exc:
             raise UpstreamServiceError("Weather API", str(exc)) from exc
 
@@ -109,7 +120,11 @@ class ExternalApiService:
         return weather_data
 
     async def list_weather_history(self, limit: int = 20) -> list[WeatherRecordData]:
-        statement = select(WeatherRecord).order_by(desc(WeatherRecord.fetched_at)).limit(limit)
+        statement = (
+            select(WeatherRecord)
+            .order_by(cast(Any, WeatherRecord.fetched_at).desc())
+            .limit(limit)
+        )
         result = await self._session.execute(statement)
         records = result.scalars().all()
         return [self._weather_record_to_history(record) for record in records]
@@ -131,12 +146,16 @@ class ExternalApiService:
         except RedisError:
             logger.warning("redis.set_failed key=%s", key, exc_info=True)
 
-    async def _get_latest_weather_record(self, latitude: float, longitude: float) -> WeatherRecord | None:
+    async def _get_latest_weather_record(
+        self,
+        latitude: float,
+        longitude: float,
+    ) -> WeatherRecord | None:
         statement = (
             select(WeatherRecord)
             .where(WeatherRecord.latitude == latitude)
             .where(WeatherRecord.longitude == longitude)
-            .order_by(desc(WeatherRecord.fetched_at))
+            .order_by(cast(Any, WeatherRecord.fetched_at).desc())
             .limit(1)
         )
         result = await self._session.execute(statement)

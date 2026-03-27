@@ -1,9 +1,12 @@
 import logging
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from time import perf_counter
 from uuid import uuid4
 
 from fastapi import FastAPI, Request
+from starlette.middleware.base import RequestResponseEndpoint
+from starlette.responses import Response
 
 from app.api.router import api_router
 from app.core.cache import close_redis, init_redis
@@ -18,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
-async def lifespan(_: FastAPI):
+async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     settings = get_settings()
     configure_logging(settings.log_level)
     if settings.app_env == "production" and settings.api_key == "change-me-local-dev":
@@ -43,7 +46,10 @@ def create_app() -> FastAPI:
     add_exception_handlers(app)
 
     @app.middleware("http")
-    async def request_context_middleware(request: Request, call_next):
+    async def request_context_middleware(
+        request: Request,
+        call_next: RequestResponseEndpoint,
+    ) -> Response:
         request_id = request.headers.get("X-Request-ID", str(uuid4()))
         token = set_request_id(request_id)
         request.state.request_id = request_id

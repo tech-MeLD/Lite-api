@@ -162,3 +162,9 @@ GitHub Actions runs:
 - `ruff check .`
 - `mypy app`
 - `pytest`
+
+## Docs
+
+- API guide: `docs/API.md`
+- Design guide: `docs/DESIGN.md`
+- Testing guide: `docs/TESTING.md`

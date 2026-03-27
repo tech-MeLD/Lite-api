@@ -1,12 +1,16 @@
 from fastapi.testclient import TestClient
 
 from app.api.routes import health as health_routes
+from app.core.config import get_settings
 from app.main import app
 from app.schemas.external import GitHubRepoStats, WeatherData, WeatherRecordData
 from app.services.external_api import get_external_api_service
 
 client = TestClient(app)
-API_HEADERS = {"X-API-Key": "change-me-local-dev"}
+
+
+def api_headers() -> dict[str, str]:
+    return {"X-API-Key": get_settings().api_key}
 
 
 class MockExternalApiService:
@@ -85,7 +89,7 @@ def test_github_repo_stats() -> None:
 
     response = client.get(
         "/api/v1/external/github/repo-stats?owner=fastapi&repo=fastapi",
-        headers=API_HEADERS,
+        headers=api_headers(),
     )
 
     assert response.status_code == 200
@@ -97,7 +101,10 @@ def test_github_repo_stats() -> None:
 def test_weather() -> None:
     app.dependency_overrides[get_external_api_service] = override_external_api_service
 
-    response = client.get("/api/v1/external/weather?latitude=39.9&longitude=116.4", headers=API_HEADERS)
+    response = client.get(
+        "/api/v1/external/weather?latitude=39.9&longitude=116.4",
+        headers=api_headers(),
+    )
 
     assert response.status_code == 200
     assert response.json()["data"]["temperature_celsius"] == 21.5
@@ -108,7 +115,7 @@ def test_weather() -> None:
 def test_weather_history() -> None:
     app.dependency_overrides[get_external_api_service] = override_external_api_service
 
-    response = client.get("/api/v1/external/weather/history?limit=10", headers=API_HEADERS)
+    response = client.get("/api/v1/external/weather/history?limit=10", headers=api_headers())
 
     assert response.status_code == 200
     assert response.json()["data"][0]["id"] == 1

@@ -59,7 +59,11 @@ async def dependency_health_check(response: Response) -> ApiResponse[HealthStatu
     sqlite_status, sqlite_detail = await check_database_health()
 
     overall_status = "ok" if redis_status == "ok" and sqlite_status == "ok" else "degraded"
-    response.status_code = status.HTTP_200_OK if overall_status == "ok" else status.HTTP_503_SERVICE_UNAVAILABLE
+    response.status_code = (
+        status.HTTP_200_OK
+        if overall_status == "ok"
+        else status.HTTP_503_SERVICE_UNAVAILABLE
+    )
 
     payload = HealthStatusData(
         status=overall_status,

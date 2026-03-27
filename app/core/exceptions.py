@@ -1,4 +1,5 @@
 from enum import Enum
+from typing import Any
 
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.exceptions import RequestValidationError
@@ -21,7 +22,7 @@ class ApiException(Exception):
         status_code: int,
         code: ErrorCode,
         message: str,
-        details: dict | list | None = None,
+        details: Any = None,
     ) -> None:
         self.status_code = status_code
         self.code = code
@@ -31,7 +32,12 @@ class ApiException(Exception):
 
 
 class UpstreamServiceError(ApiException):
-    def __init__(self, service_name: str, detail: str, status_code: int = status.HTTP_502_BAD_GATEWAY) -> None:
+    def __init__(
+        self,
+        service_name: str,
+        detail: str,
+        status_code: int = status.HTTP_502_BAD_GATEWAY,
+    ) -> None:
         super().__init__(
             status_code=status_code,
             code=ErrorCode.UPSTREAM_SERVICE_ERROR,
@@ -41,30 +47,37 @@ class UpstreamServiceError(ApiException):
 
 
 def _error_response(
+    request: Request,
     status_code: int,
     code: ErrorCode,
     message: str,
-    details: dict | list | None = None,
+    details: Any = None,
 ) -> JSONResponse:
+    request_id = getattr(request.state, "request_id", get_request_id())
     return JSONResponse(
         status_code=status_code,
         content={
             "code": code,
             "message": message,
             "details": details,
-            "request_id": get_request_id(),
+            "request_id": request_id,
         },
+        headers={"X-Request-ID": request_id},
     )
 
 
 def add_exception_handlers(app: FastAPI) -> None:
     @app.exception_handler(ApiException)
-    async def api_exception_handler(_: Request, exc: ApiException) -> JSONResponse:
-        return _error_response(exc.status_code, exc.code, exc.message, exc.details)
+    async def api_exception_handler(request: Request, exc: ApiException) -> JSONResponse:
+        return _error_response(request, exc.status_code, exc.code, exc.message, exc.details)
 
     @app.exception_handler(RequestValidationError)
-    async def request_validation_exception_handler(_: Request, exc: RequestValidationError) -> JSONResponse:
+    async def request_validation_exception_handler(
+        request: Request,
+        exc: RequestValidationError,
+    ) -> JSONResponse:
         return _error_response(
+            request,
             status.HTTP_422_UNPROCESSABLE_ENTITY,
             ErrorCode.VALIDATION_ERROR,
             "Request validation failed",
@@ -72,16 +85,18 @@ def add_exception_handlers(app: FastAPI) -> None:
         )
 
     @app.exception_handler(HTTPException)
-    async def http_exception_handler(_: Request, exc: HTTPException) -> JSONResponse:
+    async def http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:
         return _error_response(
+            request,
             exc.status_code,
             ErrorCode.HTTP_ERROR,
             str(exc.detail),
         )
 
     @app.exception_handler(Exception)
-    async def unhandled_exception_handler(_: Request, __: Exception) -> JSONResponse:
+    async def unhandled_exception_handler(request: Request, __: Exception) -> JSONResponse:
         return _error_response(
+            request,
             status.HTTP_500_INTERNAL_SERVER_ERROR,
             ErrorCode.INTERNAL_SERVER_ERROR,
             "Internal server error",

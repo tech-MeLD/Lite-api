@@ -1,4 +1,4 @@
-from typing import Generic, TypeVar
+from typing import Any, Generic, TypeVar
 
 from pydantic import BaseModel
 
@@ -13,5 +13,5 @@ class ApiResponse(BaseModel, Generic[T]):
 class ErrorResponse(BaseModel):
     code: str
     message: str
-    details: dict | list | None = None
+    details: Any = None
     request_id: str

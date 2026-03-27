@@ -162,3 +162,9 @@ GitHub Actions 会执行：
 - `ruff check .`
 - `mypy app`
 - `pytest`
+
+## 文档
+
+- 接口文档：`docs/API.md`
+- 设计文档：`docs/DESIGN.md`
+- 测试文档：`docs/TESTING.md`
