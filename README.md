@@ -1,54 +1,54 @@
-# Standard FastAPI Backend
+# 标准 FastAPI 后端
 
-A lightweight but production-aware FastAPI template for a public REST API.
+这是一个保持轻量、但已经具备公网 API 基本防护能力的 FastAPI 模板。
 
-## What Was Added
+## 这次新增了什么
 
-- Request logging with `X-Request-ID`
-- Standardized API error codes and error response shape
-- Simple `X-API-Key` protection for public endpoints
-- Redis cache for GitHub repository data
-- SQLite + SQLModel persistence for weather data
-- `pre-commit`, `ruff`, `mypy`, `pytest`
+- 统一日志，自动生成或透传 `X-Request-ID`
+- 统一 API 异常码和错误返回结构
+- 简单 `X-API-Key` 鉴权
+- GitHub 数据走 Redis TTL 缓存
+- 天气数据使用 SQLite + SQLModel 持久化
+- `pre-commit`、`ruff`、`mypy`、`pytest`
 - GitHub Actions CI
 
-## Project Notes
+## 设计原则
 
-This project intentionally stays small:
+这套方案刻意避免过度工程化：
 
-- no Alembic
-- no RBAC or JWT
-- no message queue
-- no split into many micro-layers
+- 不引入 Alembic
+- 不上 JWT / OAuth
+- 不拆成复杂的模块层级
+- 不增加消息队列或后台任务系统
 
-It is enough for a team to start cleanly, while leaving room to grow.
+目标是让团队“现在就能稳定开发”，而不是一开始就背上很重的维护成本。
 
-## API Overview
+## API 概览
 
-Public endpoint:
+公开接口：
 
 - `GET /api/v1/health`
 - `GET /api/v1/health/dependencies`
 
-Protected endpoints:
+需要 API-Key 的接口：
 
 - `GET /api/v1/external/github/repo-stats?owner=fastapi&repo=fastapi`
 - `GET /api/v1/external/weather?latitude=39.9042&longitude=116.4074`
 - `GET /api/v1/external/weather/history?limit=20`
 
-Protected endpoints require:
+请求头示例：
 
 ```http
 X-API-Key: your-api-key
 ```
 
-Every response also includes:
+所有响应也会带上：
 
 ```http
 X-Request-ID: <uuid>
 ```
 
-## Error Response Format
+## 异常返回格式
 
 ```json
 {
@@ -59,7 +59,7 @@ X-Request-ID: <uuid>
 }
 ```
 
-Current error codes:
+当前定义的异常码：
 
 - `INVALID_API_KEY`
 - `VALIDATION_ERROR`
@@ -67,30 +67,30 @@ Current error codes:
 - `HTTP_ERROR`
 - `INTERNAL_SERVER_ERROR`
 
-## Runtime Decisions
+## 关键设计决策
 
-### Python Version
+### 1. Python 版本统一
 
-Use `Python 3.11.14` as the team baseline.
+团队基线固定为 `Python 3.11.14`。
 
-The version is aligned in:
+同时在这些位置统一：
 
 - `pyproject.toml`
 - `.python-version`
 - `Dockerfile`
 - GitHub Actions
 
-Python should not be managed only as a package dependency. The correct approach is to pin it in tooling, packaging, and container runtime together.
+Python 版本不应该只写在依赖里，而是要在包元数据、本地工具链、CI、容器运行时一起固定。
 
-### GitHub Data
+### 2. GitHub 数据
 
-GitHub data is not stored in a database. It is cached in Redis with a TTL to reduce upstream requests and lower the chance of abuse.
+GitHub 数据暂时不落库，只通过 Redis 做 TTL 缓存，减少外部 API 请求次数，也能降低被盗刷后的放大效应。
 
-### Weather Data
+### 3. 天气数据
 
-Weather data is fetched from the external API and stored in SQLite through SQLModel. Recent records are reused as a simple local cache, and history can be queried through the history endpoint.
+天气数据会落到 SQLite，通过 SQLModel 管理。当前实现会优先复用近期缓存记录，并支持历史查询接口。
 
-## Local Development
+## 本地开发
 
 ```bash
 python -m venv .venv
@@ -98,7 +98,7 @@ python -m pip install --upgrade pip
 python -m pip install -e .[dev]
 ```
 
-Then prepare `.env` from `.env.example` and run:
+然后根据 `.env.example` 准备 `.env`，再启动：
 
 ```bash
 uvicorn app.main:app --reload
@@ -106,7 +106,7 @@ uvicorn app.main:app --reload
 
 ## Makefile
 
-If your team uses `make`, these commands are now standardized:
+如果团队习惯统一命令入口，现在可以直接使用：
 
 ```bash
 make dev
@@ -115,16 +115,16 @@ make check
 make docker-up
 ```
 
-Common targets:
+常用目标：
 
-- `make dev`: install app and dev dependencies
-- `make run`: start FastAPI in reload mode
-- `make lint`: run Ruff
-- `make typecheck`: run mypy
-- `make test`: run pytest
-- `make check`: run lint, typecheck, and tests
+- `make dev`：安装项目和开发依赖
+- `make run`：本地热更新启动服务
+- `make lint`：执行 Ruff
+- `make typecheck`：执行 mypy
+- `make test`：执行 pytest
+- `make check`：串行执行 lint、类型检查、测试
 
-On Windows, run them from Git Bash, WSL, or any environment with `make` installed.
+如果你在 Windows 上使用，建议通过 Git Bash、WSL 或已安装 `make` 的终端来执行。
 
 ## Docker
 
@@ -132,20 +132,20 @@ On Windows, run them from Git Bash, WSL, or any environment with `make` installe
 docker compose up --build
 ```
 
-This starts:
+会同时启动：
 
-- the FastAPI app
-- Redis for GitHub cache
-- a mounted SQLite data directory for weather records
+- FastAPI 服务
+- Redis 缓存
+- 挂载 SQLite 数据目录
 
-## Health Checks
+## 健康检查
 
-- `GET /api/v1/health`: lightweight liveness check
-- `GET /api/v1/health/dependencies`: Redis and SQLite dependency check
+- `GET /api/v1/health`：基础存活检查
+- `GET /api/v1/health/dependencies`：Redis 和 SQLite 依赖检查
 
-The dependency health endpoint returns `200` when all dependencies are healthy, and `503` when any dependency is degraded.
+依赖健康检查在全部正常时返回 `200`，任一依赖异常时返回 `503`。
 
-## Quality Tools
+## 代码质量工具
 
 ```bash
 pre-commit install
@@ -157,14 +157,14 @@ pytest
 
 ## CI
 
-GitHub Actions runs:
+GitHub Actions 会执行：
 
 - `ruff check .`
 - `mypy app`
 - `pytest`
 
-## Docs
+## 文档
 
-- API guide: `docs/API.md`
-- Design guide: `docs/DESIGN.md`
-- Testing guide: `docs/TESTING.md`
+- 接口文档：`docs/API.md`
+- 设计文档：`docs/DESIGN.md`
+- 测试文档：`docs/TESTING.md`
